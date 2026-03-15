@@ -76,3 +76,66 @@ Open the URL generated in your console. Once you grant permission to the app, yo
 - [App extensions](https://shopify.dev/docs/apps/build/app-extensions)
 - [Extension only apps](https://shopify.dev/docs/apps/build/app-extensions/build-extension-only-app)
 - [Shopify CLI](https://shopify.dev/docs/apps/tools/cli)
+
+
+
+## validationSettings pseudo code : 
+MAIN ENTRY POINT
+    if (metafield definition for "$app:product-limits / product-limits-values" does not exist):
+        create the definition (ownerType: VALIDATION, type: json)
+
+    configuration = JSON.parse(shopify.data.validation.metafields[0].value or "{}")
+
+    products = fetch first 8 products with their first 4 variants each
+
+    render <Extension configuration={configuration} products={products} />
+
+
+COMPONENT Extension
+    variantLimits = useState(configuration)
+    errors        = useState([])
+
+    if (no products):
+        return "No products found."
+
+    // Build rows for table (grouping logic)
+    tableRows = []
+    for each product:
+        if (product has multiple variants or non-default title):
+            for each variant:
+                add row { product, variant, isFirstVariant, variantCount }
+        else:
+            add single row with "Default" title
+
+    function updateVariantLimit(variantId, newValue):
+        newLimits = copy of variantLimits
+        newLimits[variantId] = newValue
+        variantLimits = newLimits          // UI updates instantly
+        applyMetafieldUpdate(newLimits)    // save to Shopify
+
+    function applyMetafieldUpdate(limits):
+        result = shopify.applyMetafieldChange(
+            namespace: "$app:product-limits",
+            key:       "product-limits-values",
+            value:     JSON.stringify(limits)
+        )
+        if (result is error):
+            show error banner
+
+    RENDER:
+        <s-function-settings>
+            <ErrorBanner errors={errors} />
+
+            <s-table>
+                headers: Product | Variant | Limit
+
+                for each tableRow:
+                    <s-table-row>
+                        Product cell:   (only on first variant) thumbnail + title + "(X variants)"
+                        Variant cell:   variant.title
+                        Limit cell:     <VariantNumberField
+                                            value={variantLimits[variant.id]}
+                                            onChange={updateVariantLimit}
+                                        />
+            </s-table>
+        </s-function-settings>
